@@ -1,0 +1,10 @@
+{
+	"id": "locale-mirror",
+	"name": "Locale Mirror",
+	"version": "1.0.0",
+	"minAppVersion": "1.4.0",
+	"description": "Toggle seamlessly between original notes and mirrored local translations stored in a Locales/<LANG>/ folder, matched by frontmatter UUID, relative path, or filename suffix.",
+	"author": "Exekit",
+	"authorUrl": "https://github.com/exekit-dev",
+	"isDesktopOnly": false
+}
