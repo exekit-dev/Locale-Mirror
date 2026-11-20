@@ -8,6 +8,16 @@ An Obsidian plugin for rendering mirrored local note translations in place witho
 
 ---
 
+## Demo
+
+![Switching between the original note and its translation in Obsidian](docs/images/locale-mirror-preview.gif)
+
+### Original and translated note side by side
+
+![Original English note on the left and its Russian translation on the right](docs/images/locale-mirror-comparison.png)
+
+---
+
 ## Overview
 
 Maintaining multilingual notes or translated technical documentation inside an Obsidian vault typically creates two problems:
