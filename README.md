@@ -3,7 +3,7 @@
 An Obsidian plugin for rendering mirrored local note translations in place without duplicating files across the primary vault tree, search index, or graph view.
 
 [![Obsidian](https://img.shields.io/badge/Obsidian-%3E%3D1.4.0-483699)](https://obsidian.md)
-[![Version](https://img.shields.io/badge/version-1.0.0-1f2937)](https://github.com/exekit-dev/Locale-Mirror/releases)
+[![Version](https://img.shields.io/badge/version-1.0.1-1f2937)](https://github.com/exekit-dev/Locale-Mirror/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-1f2937)](LICENSE)
 
 ---

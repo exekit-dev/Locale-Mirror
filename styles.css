@@ -141,11 +141,13 @@
 
 /* ---- Overlay Container (Reading View + Live Preview) ---- */
 
-.view-content.lm-overlay-active > .markdown-source-view,
-.view-content.lm-overlay-active > .markdown-reading-view {
-	display: none !important;
+.workspace-leaf-content .view-content.lm-overlay-active > .markdown-source-view.mod-cm6,
+.workspace-leaf-content .view-content.lm-overlay-active > .markdown-source-view,
+.workspace-leaf-content .view-content.lm-overlay-active > .markdown-reading-view {
+	display: none;
 }
 
+.view-content > .lm-overlay-container.markdown-preview-view,
 .lm-overlay-container {
 	position: relative;
 	width: 100%;
@@ -153,7 +155,7 @@
 	overflow-y: auto;
 	overflow-x: hidden;
 	background-color: var(--background-primary);
-	padding: 0 !important;
+	padding: 0;
 }
 
 .lm-overlay-sizer {
@@ -199,7 +201,6 @@
 
 @supports (backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px)) {
 	.lm-banner {
-		background-color: var(--background-secondary);
 		background-color: color-mix(in srgb, var(--background-secondary) 88%, transparent);
 		-webkit-backdrop-filter: blur(8px);
 		backdrop-filter: blur(8px);

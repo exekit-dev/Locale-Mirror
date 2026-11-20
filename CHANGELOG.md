@@ -4,6 +4,14 @@ All notable changes to **Locale Mirror** will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-11-20
+
+### Changed
+- Scoped translation index scanning directly to the configured `Locales/` folder hierarchy (`vault.getAbstractFileByPath`) instead of full-vault enumeration (`vault.getMarkdownFiles()`).
+- Replaced `!important` CSS overrides with higher-specificity selectors and removed duplicate `background-color` fallback declaration in `styles.css`.
+- Removed redundant top-level plugin name heading inside `LocaleMirrorSettingTab`.
+- Added GitHub build provenance artifact attestations (`actions/attest-build-provenance@v2`) for `main.js`, `manifest.json`, and `styles.css` in the release workflow.
+
 ## [1.0.0] - 2026-11-20
 
 ### Added

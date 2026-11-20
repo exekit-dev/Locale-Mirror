@@ -223,8 +223,6 @@ class TranslationIndex {
 		this.byUuid.clear();
 		this.byRelPath.clear();
 		this.byDirStem.clear();
-		this.originalsByUuid.clear();
-		this.originalsByRelPath.clear();
 
 		let totalTranslations = 0;
 		let uuidLinkedCount = 0;
@@ -232,78 +230,107 @@ class TranslationIndex {
 		const { vault } = this.plugin.app;
 		const localesFolder = this.getLocalesFolder();
 
-		// Discover language folders even if currently empty
+		// Refresh cached original file references without full-vault enumeration
+		for (const [relLower, origFile] of Array.from(this.originalsByRelPath.entries())) {
+			const current = origFile && origFile.path ? vault.getAbstractFileByPath(origFile.path) : null;
+			if (current instanceof TFile && !this.isTranslationPath(current.path)) {
+				const origUuid = this.getFileUuid(current);
+				if (origUuid) {
+					this.originalsByUuid.set(origUuid, current);
+				}
+			} else {
+				this.originalsByRelPath.delete(relLower);
+			}
+		}
+		for (const [origUuid, origFile] of Array.from(this.originalsByUuid.entries())) {
+			const current = origFile && origFile.path ? vault.getAbstractFileByPath(origFile.path) : null;
+			if (!(current instanceof TFile) || this.isTranslationPath(current.path) || this.getFileUuid(current) !== origUuid) {
+				this.originalsByUuid.delete(origUuid);
+			}
+		}
+
+		// Traverse only the configured Locales folder (avoids full-vault enumeration)
+		const translationFiles = [];
 		const rootAbstract = vault.getAbstractFileByPath(localesFolder);
-		if (rootAbstract instanceof TFolder) {
+		if (rootAbstract instanceof TFolder && Array.isArray(rootAbstract.children)) {
+			const stack = [];
 			for (const child of rootAbstract.children) {
 				if (child instanceof TFolder) {
 					const langKey = child.name.toLowerCase();
 					if (!this.languages.has(langKey)) {
 						this.languages.set(langKey, child.name);
 					}
+					stack.push(child);
+				}
+			}
+			while (stack.length > 0) {
+				const folder = stack.pop();
+				if (!folder || !Array.isArray(folder.children)) continue;
+				for (const item of folder.children) {
+					if (item instanceof TFolder) {
+						stack.push(item);
+					} else if (
+						item instanceof TFile &&
+						String(item.extension || "").toLowerCase() === "md"
+					) {
+						translationFiles.push(item);
+					}
 				}
 			}
 		}
 
-		const files = vault.getMarkdownFiles();
-		for (const file of files) {
+		for (const file of translationFiles) {
 			const parsed = this.parseTranslationPath(file.path);
+			if (!parsed) continue;
 			const uuid = this.getFileUuid(file);
 
-			if (parsed) {
-				totalTranslations += 1;
-				const { langKey, langLabel, relPath, relDir, basename } = parsed;
-				if (!this.languages.has(langKey)) {
-					this.languages.set(langKey, langLabel);
-				}
+			totalTranslations += 1;
+			const { langKey, langLabel, relPath, relDir, basename } = parsed;
+			if (!this.languages.has(langKey)) {
+				this.languages.set(langKey, langLabel);
+			}
 
-				const entry = {
+			const entry = {
+				langKey,
+				langLabel: this.languages.get(langKey) || langLabel,
+				file,
+			};
+
+			// 1. Index by UUID
+			if (uuid) {
+				uuidLinkedCount += 1;
+				let langMap = this.byUuid.get(uuid);
+				if (!langMap) {
+					langMap = new Map();
+					this.byUuid.set(uuid, langMap);
+				}
+				langMap.set(langKey, entry);
+			}
+
+			// 2. Index by mirrored relative path
+			const relPathLower = relPath.toLowerCase();
+			let pathMap = this.byRelPath.get(relPathLower);
+			if (!pathMap) {
+				pathMap = new Map();
+				this.byRelPath.set(relPathLower, pathMap);
+			}
+			pathMap.set(langKey, entry);
+
+			// 3. Index by suffix-stripped stem inside mirrored directory
+			const stripped = stripLanguageSuffix(basename, langKey);
+			if (stripped) {
+				const dirLower = relDir.toLowerCase();
+				let dirList = this.byDirStem.get(dirLower);
+				if (!dirList) {
+					dirList = [];
+					this.byDirStem.set(dirLower, dirList);
+				}
+				dirList.push({
 					langKey,
-					langLabel: this.languages.get(langKey) || langLabel,
+					langLabel: entry.langLabel,
+					stemLower: stripped.toLowerCase(),
 					file,
-				};
-
-				// 1. Index by UUID
-				if (uuid) {
-					uuidLinkedCount += 1;
-					let langMap = this.byUuid.get(uuid);
-					if (!langMap) {
-						langMap = new Map();
-						this.byUuid.set(uuid, langMap);
-					}
-					langMap.set(langKey, entry);
-				}
-
-				// 2. Index by mirrored relative path
-				const relPathLower = relPath.toLowerCase();
-				let pathMap = this.byRelPath.get(relPathLower);
-				if (!pathMap) {
-					pathMap = new Map();
-					this.byRelPath.set(relPathLower, pathMap);
-				}
-				pathMap.set(langKey, entry);
-
-				// 3. Index by suffix-stripped stem inside mirrored directory
-				const stripped = stripLanguageSuffix(basename, langKey);
-				if (stripped) {
-					const dirLower = relDir.toLowerCase();
-					let dirList = this.byDirStem.get(dirLower);
-					if (!dirList) {
-						dirList = [];
-						this.byDirStem.set(dirLower, dirList);
-					}
-					dirList.push({
-						langKey,
-						langLabel: entry.langLabel,
-						stemLower: stripped.toLowerCase(),
-						file,
-					});
-				}
-			} else if (!this.isTranslationPath(file.path)) {
-				this.originalsByRelPath.set(file.path.toLowerCase(), file);
-				if (uuid) {
-					this.originalsByUuid.set(uuid, file);
-				}
+				});
 			}
 		}
 
@@ -328,7 +355,9 @@ class TranslationIndex {
 
 		// Priority 1: Frontmatter UUID
 		const uuid = this.getFileUuid(file);
+		this.originalsByRelPath.set(file.path.toLowerCase(), file);
 		if (uuid) {
+			this.originalsByUuid.set(uuid, file);
 			const uuidMap = this.byUuid.get(uuid);
 			if (uuidMap) {
 				for (const [langKey, entry] of uuidMap.entries()) {
@@ -398,6 +427,8 @@ class TranslationIndex {
 		const parsed = this.parseTranslationPath(translationFile.path);
 		if (!parsed) return null;
 
+		const { vault } = this.plugin.app;
+
 		// Priority 1: UUID
 		const uuid = this.getFileUuid(translationFile);
 		if (uuid) {
@@ -406,8 +437,13 @@ class TranslationIndex {
 		}
 
 		// Priority 2: Exact mirrored path
-		const exact = this.originalsByRelPath.get(parsed.relPath.toLowerCase());
-		if (exact) return exact;
+		const exactCached = this.originalsByRelPath.get(parsed.relPath.toLowerCase());
+		if (exactCached) return exactCached;
+		const exactDirect = vault.getAbstractFileByPath(parsed.relPath);
+		if (exactDirect instanceof TFile && !this.isTranslationPath(exactDirect.path)) {
+			this.originalsByRelPath.set(exactDirect.path.toLowerCase(), exactDirect);
+			return exactDirect;
+		}
 
 		// Priority 3: Suffix stripped path
 		if (this.plugin.settings.enableSuffixFallback) {
@@ -416,8 +452,13 @@ class TranslationIndex {
 				const candidateRel = parsed.relDir
 					? `${parsed.relDir}/${stripped}.md`
 					: `${stripped}.md`;
-				const bySuffix = this.originalsByRelPath.get(candidateRel.toLowerCase());
-				if (bySuffix) return bySuffix;
+				const bySuffixCached = this.originalsByRelPath.get(candidateRel.toLowerCase());
+				if (bySuffixCached) return bySuffixCached;
+				const bySuffixDirect = vault.getAbstractFileByPath(candidateRel);
+				if (bySuffixDirect instanceof TFile && !this.isTranslationPath(bySuffixDirect.path)) {
+					this.originalsByRelPath.set(bySuffixDirect.path.toLowerCase(), bySuffixDirect);
+					return bySuffixDirect;
+				}
 			}
 		}
 
@@ -875,7 +916,7 @@ class LocaleMirrorPlugin extends Plugin {
 			document.head.appendChild(styleEl);
 		}
 		const escapedPath = escapeCssAttr(this.index.getLocalesFolder());
-		styleEl.textContent = `.nav-folder:has(> .nav-folder-title[data-path="${escapedPath}"]) { display: none !important; }`;
+		styleEl.textContent = `.nav-files-container .tree-item.nav-folder:has(> .tree-item-self.nav-folder-title[data-path="${escapedPath}"]) { display: none; }`;
 	}
 
 	/* ---------------------------------------------------------------------
@@ -2054,6 +2095,10 @@ class LocaleMirrorPlugin extends Plugin {
 		}
 
 		this.index.setPendingUuid(file.path, prop, uuid);
+		if (!this.index.isTranslationPath(file.path)) {
+			this.index.originalsByRelPath.set(file.path.toLowerCase(), file);
+			this.index.originalsByUuid.set(String(uuid).trim().toLowerCase(), file);
+		}
 		await this.app.fileManager.processFrontMatter(file, (fm) => {
 			fm[prop] = uuid;
 		});
@@ -2202,8 +2247,6 @@ class LocaleMirrorSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 		containerEl.addClass("lm-settings");
-
-		new Setting(containerEl).setName("Locale Mirror").setHeading();
 
 		// 1. 3-Metric KPI Hero Card + Active Folder & Detected Language Pills
 		const heroEl = containerEl.createDiv({ cls: "lm-settings-hero" });
